@@ -68,7 +68,7 @@ jobs:
           New-Item -ItemType Directory -Path $distDir -Force
           
           # Copy executable and bundled DLLs from build output
-          Copy-Item -Path "build\BrightnessSettings.exe" -Destination $distDir\
+          Copy-Item -Path "build\$env:APP_NAME.exe" -Destination $distDir\
           if (Test-Path "build\libwinpthread-1.dll") {
               Copy-Item -Path "build\libwinpthread-1.dll" -Destination $distDir\
           }
