@@ -1,0 +1,107 @@
+name: Build and Release (MinGW)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        # Ref: https://github.com/actions/checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up MSYS2 MinGW-w64
+        # Ref: https://github.com/msys2/setup-msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Extract latest version from commits
+        id: extract-version
+        shell: pwsh
+        run: |
+          $version = git log --pretty=format:%s | ForEach-Object {
+              if ($_ -match '^v\d+(\.\d+)+') {
+                  $matches[0]
+              }
+          } | Select-Object -First 1
+          if (-not $version) {
+              Write-Host "No version tag found in commit history, defaulting to v0.1.0"
+              $version = "v0.1.0"
+          }
+          Write-Host "Latest version: $version"
+          "VERSION_TAG=$version" >> $env:GITHUB_ENV
+          "APP_NAME=BrightnessSettings" >> $env:GITHUB_ENV
+
+      - name: Configure CMake
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G "Ninja" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_COMPILER=gcc
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          cmake --build build --config Release
+
+      - name: Package artifacts
+        shell: pwsh
+        run: |
+          $distDir = "dist\$env:APP_NAME"
+          New-Item -ItemType Directory -Path $distDir -Force
+          
+          # Copy executable and bundled DLLs from build output
+          Copy-Item -Path "build\BrightnessSettings.exe" -Destination $distDir\
+          if (Test-Path "build\libwinpthread-1.dll") {
+              Copy-Item -Path "build\libwinpthread-1.dll" -Destination $distDir\
+          }
+
+          # Create release archive
+          New-Item -ItemType Directory -Path "release" -Force
+          Compress-Archive -Path "$distDir\*" -DestinationPath "release\$($env:APP_NAME)_$($env:VERSION_TAG).zip"
+
+      - name: Delete existing release/tag
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          try {
+            gh release delete $env:VERSION_TAG --yes
+          } catch {
+            Write-Host "No existing release found, skipped deleting."
+          }
+          try {
+            git push origin ":refs/tags/$env:VERSION_TAG"
+          } catch {
+            Write-Host "No existing tag found, skipped deleting."
+          }
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        # Ref: https://github.com/softprops/action-gh-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          name: ${{ env.APP_NAME }} ${{ env.VERSION_TAG }}
+          files: release/${{ env.APP_NAME }}_${{ env.VERSION_TAG }}.zip
+          body: Automatically built with MinGW and released by GitHub Actions.
+          draft: false
+          prerelease: false
