@@ -7,7 +7,10 @@ Automatically adjust monitors' brightness according to ambient light
 
 ## Install
 
-Get PCB boards VEML 7700 as ambient light sensor, and MCP 2221 as USB to I2C bridge.
+Get PCB:
+
+-   VEML 7700 (ambient light sensor)
+-   MCP 2221 (USB to I2C bridge)
 
 Use female to female DuPont and jumpers to connect the following pairs of pin.
 
@@ -18,9 +21,9 @@ Use female to female DuPont and jumpers to connect the following pairs of pin.
 | SCL       | SCL      |
 | SDA       | SDA      |
 
-Use male to male USB-C or USB-C to USB-A, plugging MCP 2221 into the computer's USB portal.
+Use any male to male USB cable, plugging MCP 2221 into the computer's USB portal.
 
-Execute this program. It will stay in system tray.
+Execute this program. It will stay in system tray. The user can set starting with operation system later in the settings.
 
 
 
@@ -47,3 +50,9 @@ To minimize unnecessary EEPROM write cycles, this program incorporates the follo
 >   [!TIP]
 >
 >   To check if your monitor caches brightness safely in volatile RAM, change the brightness via the application slider, then immediately pull the AC power plug from the wall without using the monitor's power button. If the display reboots to its previous brightness level instead of the modified value, your scaler uses deferred non-volatile caching and is fully safe against wear.
+
+
+
+## Usage
+
+![image-20260930072427302](./assets/image-20260930072427302.png)
