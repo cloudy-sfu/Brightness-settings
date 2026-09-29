@@ -31,7 +31,18 @@ if(NOT imgui_POPULATED)
     )
 endif()
 
-add_executable(Brightness WIN32 main.cpp)
+add_executable(Brightness WIN32
+        main.cpp
+        ambient_sensor.cpp
+        app_state.cpp
+        app_ui.cpp
+        autostart.cpp
+        brightness_curve.cpp
+        curve_editor.cpp
+        graphics.cpp
+        monitors.cpp
+        windows_ui.cpp
+)
 
 target_link_libraries(Brightness PRIVATE
         imgui
