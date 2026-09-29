@@ -26,6 +26,7 @@ struct MonitorEntry {
     HANDLE hPhysical;
     bool hasPhysicalHandle;
     std::string name;
+    std::string settingsId;
     int minBrightness;
     int maxBrightness;
     int currentBrightness;

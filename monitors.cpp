@@ -1,11 +1,80 @@
 #include "monitors.h"
 
 #include "app_state.h"
+#include "settings.h"
 
 #include <highlevelmonitorconfigurationapi.h>
 #include <lowlevelmonitorconfigurationapi.h>
 
 namespace {
+
+std::string WideToUtf8(const wchar_t* value) {
+    if (!value || value[0] == L'\0') return {};
+    const int required = WideCharToMultiByte(
+        CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+    if (required <= 1) return {};
+    std::string result(static_cast<size_t>(required), '\0');
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        value,
+        -1,
+        result.data(),
+        required,
+        nullptr,
+        nullptr);
+    result.resize(static_cast<size_t>(required - 1));
+    return result;
+}
+
+std::string GetStableMonitorId(HMONITOR monitor) {
+    MONITORINFOEXW monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (!GetMonitorInfoW(monitor, &monitorInfo)) return {};
+
+    UINT32 pathCount = 0;
+    UINT32 modeCount = 0;
+    if (GetDisplayConfigBufferSizes(
+            QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount) != ERROR_SUCCESS) {
+        return WideToUtf8(monitorInfo.szDevice);
+    }
+
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+    if (QueryDisplayConfig(
+            QDC_ONLY_ACTIVE_PATHS,
+            &pathCount,
+            paths.data(),
+            &modeCount,
+            modes.data(),
+            nullptr) != ERROR_SUCCESS) {
+        return WideToUtf8(monitorInfo.szDevice);
+    }
+
+    for (UINT32 i = 0; i < pathCount; ++i) {
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName{};
+        sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        sourceName.header.size = sizeof(sourceName);
+        sourceName.header.adapterId = paths[i].sourceInfo.adapterId;
+        sourceName.header.id = paths[i].sourceInfo.id;
+        if (DisplayConfigGetDeviceInfo(&sourceName.header) != ERROR_SUCCESS ||
+            wcscmp(sourceName.viewGdiDeviceName, monitorInfo.szDevice) != 0) {
+            continue;
+        }
+
+        DISPLAYCONFIG_TARGET_DEVICE_NAME targetName{};
+        targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+        targetName.header.size = sizeof(targetName);
+        targetName.header.adapterId = paths[i].targetInfo.adapterId;
+        targetName.header.id = paths[i].targetInfo.id;
+        if (DisplayConfigGetDeviceInfo(&targetName.header) == ERROR_SUCCESS &&
+            targetName.monitorDevicePath[0] != L'\0') {
+            return WideToUtf8(targetName.monitorDevicePath);
+        }
+    }
+
+    return WideToUtf8(monitorInfo.szDevice);
+}
 
 BOOL CALLBACK MonitorEnumProc(
     HMONITOR monitor,
@@ -26,7 +95,11 @@ BOOL CALLBACK MonitorEnumProc(
         return TRUE;
     }
 
-    for (const auto& physical : physicalMonitors) {
+    const std::string stableMonitorId = GetStableMonitorId(monitor);
+    for (size_t physicalIndex = 0;
+         physicalIndex < physicalMonitors.size();
+         ++physicalIndex) {
+        const auto& physical = physicalMonitors[physicalIndex];
         DWORD minimum = 0;
         DWORD current = 0;
         DWORD maximum = 100;
@@ -59,14 +132,15 @@ BOOL CALLBACK MonitorEnumProc(
         entry.name = description[0] != '\0'
             ? description
             : "Display " + std::to_string(g_Monitors.size() + 1);
+        entry.settingsId =
+            stableMonitorId + "|physical-" + std::to_string(physicalIndex);
 
         entry.minBrightness = static_cast<int>(minimum);
         entry.maxBrightness = static_cast<int>(maximum);
         entry.currentBrightness = static_cast<int>(current);
         entry.sliderValue = static_cast<int>(current);
-        entry.autoBrightness = false;
         entry.lastBrightnessReadTick = 0;
-        entry.curve = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
+        ApplySettingsToMonitor(entry);
         g_Monitors.push_back(std::move(entry));
     }
 

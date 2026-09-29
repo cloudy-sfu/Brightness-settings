@@ -41,6 +41,7 @@ add_executable(Brightness WIN32
         curve_editor.cpp
         graphics.cpp
         monitors.cpp
+        settings.cpp
         windows_ui.cpp
 )
 

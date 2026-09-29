@@ -47,13 +47,15 @@ void AddTextRotated90CounterClockwise(
 
 } // namespace
 
-void RenderCurveEditor(
+bool RenderCurveEditor(
     const char* id,
     std::vector<CurvePoint>& points,
     float currentLux
 ) {
+    bool changed = false;
     if (points.size() < 2) {
         points = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
+        changed = true;
     }
     points.front().lux = 0.0f;
     points.front().brightness = 0.0f;
@@ -210,6 +212,7 @@ void RenderCurveEditor(
 
     static int draggingIndex = -1;
     static std::string activeEditorId;
+    static bool dragChanged = false;
     int hoveredIndex = -1;
 
     for (size_t i = 0; i < points.size(); ++i) {
@@ -230,12 +233,14 @@ void RenderCurveEditor(
             if (!isEndpoint &&
                 ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                 points.erase(points.begin() + static_cast<ptrdiff_t>(i));
+                changed = true;
                 hoveredIndex = -1;
                 break;
             }
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 draggingIndex = static_cast<int>(i);
                 activeEditorId = id;
+                dragChanged = false;
             }
         }
         drawList->AddCircleFilled(position, isEndpoint ? 6.0f : 5.0f, color);
@@ -265,8 +270,10 @@ void RenderCurveEditor(
                 points.insert(
                     points.begin() + static_cast<ptrdiff_t>(i + 1),
                     {validLux, validBrightness});
+                changed = true;
                 draggingIndex = static_cast<int>(i + 1);
                 activeEditorId = id;
+                dragChanged = false;
             }
             break;
         }
@@ -276,6 +283,7 @@ void RenderCurveEditor(
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             const size_t index = static_cast<size_t>(draggingIndex);
             if (index < points.size()) {
+                const CurvePoint oldPoint = points[index];
                 float newLux =
                     ((io.MousePos.x - canvasPos.x) / side) * xAxisMaximum;
                 float newBrightness =
@@ -299,10 +307,16 @@ void RenderCurveEditor(
                             points[index + 1].brightness, newBrightness));
                     points[index] = {newLux, newBrightness};
                 }
+                if (points[index].lux != oldPoint.lux ||
+                    points[index].brightness != oldPoint.brightness) {
+                    dragChanged = true;
+                }
             }
         } else {
+            changed = changed || dragChanged;
             draggingIndex = -1;
             activeEditorId.clear();
+            dragChanged = false;
         }
     }
 
@@ -315,5 +329,7 @@ void RenderCurveEditor(
     const std::string resetButtonId = "Reset##" + std::string(id);
     if (ImGui::Button(resetButtonId.c_str())) {
         points = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
+        changed = true;
     }
+    return changed;
 }

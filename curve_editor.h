@@ -2,7 +2,7 @@
 
 #include "app_state.h"
 
-void RenderCurveEditor(
+bool RenderCurveEditor(
     const char* id,
     std::vector<CurvePoint>& points,
     float currentLux);

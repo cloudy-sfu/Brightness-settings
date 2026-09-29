@@ -4,6 +4,7 @@
 #include "autostart.h"
 #include "curve_editor.h"
 #include "monitors.h"
+#include "settings.h"
 #include "windows_ui.h"
 
 #include <highlevelmonitorconfigurationapi.h>
@@ -22,8 +23,9 @@ void RenderApplicationUi() {
             ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoCollapse);
 
-    bool autoStart = IsAutoStartEnabled();
+    bool autoStart = IsStartAtLoginConfigured();
     if (ImGui::Checkbox("Start when system login", &autoStart)) {
+        SetStartAtLoginConfigured(autoStart);
         SetAutoStart(autoStart);
     }
 
@@ -92,17 +94,21 @@ void RenderApplicationUi() {
                     std::to_string(i);
                 if (ImGui::Checkbox(
                         checkboxLabel.c_str(),
-                        &monitor.autoBrightness) &&
-                    monitor.autoBrightness) {
-                    monitor.lastBrightnessReadTick = 0;
+                        &monitor.autoBrightness)) {
+                    if (monitor.autoBrightness) {
+                        monitor.lastBrightnessReadTick = 0;
+                    }
+                    SaveMonitorSettings(monitor);
                 }
 
                 ImGui::Spacing();
                 ImGui::Text("Brightness function");
                 const std::string curveId =
                     "CurveEditor##" + std::to_string(i);
-                RenderCurveEditor(
-                    curveId.c_str(), monitor.curve, smoothedLux);
+                if (RenderCurveEditor(
+                        curveId.c_str(), monitor.curve, smoothedLux)) {
+                    SaveMonitorSettings(monitor);
+                }
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();

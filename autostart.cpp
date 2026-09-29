@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 bool IsAutoStartEnabled() {
     HKEY key;
     if (RegOpenKeyExW(
@@ -40,14 +42,18 @@ void SetAutoStart(bool enable) {
 
     if (enable) {
         wchar_t executablePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, executablePath, MAX_PATH);
+        if (GetModuleFileNameW(nullptr, executablePath, MAX_PATH) == 0) {
+            RegCloseKey(key);
+            return;
+        }
+        const std::wstring command = L"\"" + std::wstring(executablePath) + L"\"";
         RegSetValueExW(
             key,
             L"BrightnessControllerApp",
             0,
             REG_SZ,
-            reinterpret_cast<const BYTE*>(executablePath),
-            static_cast<DWORD>((wcslen(executablePath) + 1) * sizeof(wchar_t)));
+            reinterpret_cast<const BYTE*>(command.c_str()),
+            static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t)));
     } else {
         RegDeleteValueW(key, L"BrightnessControllerApp");
     }

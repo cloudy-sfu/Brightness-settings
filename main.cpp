@@ -1,8 +1,10 @@
 #include "ambient_sensor.h"
 #include "app_state.h"
 #include "app_ui.h"
+#include "autostart.h"
 #include "graphics.h"
 #include "monitors.h"
+#include "settings.h"
 #include "windows_ui.h"
 
 #include <windows.h>
@@ -144,6 +146,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     InstallTrayIcon(window);
     ShowWindow(window, SW_SHOWDEFAULT);
     UpdateWindow(window);
+    InitializeSettings();
+    SetAutoStart(IsStartAtLoginConfigured());
     RefreshMonitors();
 
     std::thread sensorThread(SensorPollingWorker);
