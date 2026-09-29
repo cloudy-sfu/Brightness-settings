@@ -41,7 +41,9 @@ constexpr float MAX_VEML_LUX     = 65535.0f * 0.0672f; // 4403.95 lx
 // A target change smaller than 5 percentage points is ignored.
 // Ref: https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-setmonitorbrightness
 constexpr int HYSTERESIS_THRESHOLD_PCT = 5;
-constexpr DWORD AUTO_READBACK_INTERVAL_MS = 1000;
+constexpr DWORD READ_INTERVAL_MS = 5000;
+// Ref: https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createeventw
+static HANDLE g_hShutdownEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 
 struct CurvePoint {
     float lux;        // X: [0, MAX_VEML_LUX]
@@ -614,8 +616,7 @@ void SensorPollingWorker() {
                  * changes made through the monitor OSD or another program
                  * are detected.
                  */
-                if (now - mon.lastBrightnessReadTick >=
-                    AUTO_READBACK_INTERVAL_MS) {
+                if (now - mon.lastBrightnessReadTick >= READ_INTERVAL_MS) {
 
                     DWORD minimum = 0;
                     DWORD current = 0;
@@ -698,11 +699,8 @@ void SensorPollingWorker() {
             );
         }
 
-        // Poll twice per second.
-        for (int i = 0;
-             i < 5 && g_AppRunning.load();
-             ++i) {
-            Sleep(100);
+        if (WaitForSingleObject(g_hShutdownEvent, READ_INTERVAL_MS) != WAIT_TIMEOUT) {
+            break; // Shutdown signaled, exit thread immediately
         }
     }
 }
@@ -1564,7 +1562,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
         // Live monitor polling: only when window is active and monitor is in manual mode
         DWORD now = GetTickCount();
-        if (now - g_LastGuiPollTime > 1000) {
+        if (now - g_LastGuiPollTime >= READ_INTERVAL_MS) {
             g_LastGuiPollTime = now;
             std::lock_guard<std::mutex> lock(g_MonitorsMutex);
             for (auto& mon : g_Monitors) {
@@ -1698,10 +1696,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
     // Termination & Cleanup
     g_AppRunning = false;
+    SetEvent(g_hShutdownEvent);
     if (sensorThread.joinable()) {
         sensorThread.join();
     }
-
+    CloseHandle(g_hShutdownEvent);
     for (auto& m : g_Monitors) {
         if (m.hasPhysicalHandle) {
             DestroyPhysicalMonitor(m.hPhysical);
