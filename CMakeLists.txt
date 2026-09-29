@@ -41,6 +41,10 @@ target_link_libraries(Brightness PRIVATE
         dxgi
         gdi32
         dwmapi
+        setupapi
+        hid
+        advapi32
+        shell32
 )
 
 # Strip binary and suppress console window under MinGW
