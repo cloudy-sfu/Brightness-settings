@@ -41,12 +41,16 @@ jobs:
               }
           } | Select-Object -First 1
           if (-not $version) {
-              Write-Host "No version tag found in commit history, defaulting to v0.1.0"
-              $version = "v0.1.0"
+              Write-Host "No version tag found in commit history, defaulting to v0.1"
+              $version = "v0.1"
           }
           Write-Host "Latest version: $version"
           "VERSION_TAG=$version" >> $env:GITHUB_ENV
-          "APP_NAME=BrightnessSettings" >> $env:GITHUB_ENV
+          $cmakelist = Get-Content -Path ./CMakeLists.txt -Raw
+          if ($cmakelist -match '(?im)^\s*project\s*\(\s*(?<appName>[^\s\)]+)') {
+            $APP_NAME=$Matches.appName
+          }
+          "APP_NAME=$APP_NAME" >> $env:GITHUB_ENV
 
       - name: Configure CMake
         shell: msys2 {0}

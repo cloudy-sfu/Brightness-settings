@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(BrightnessSettings CXX)
+project(Brightness CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,9 +31,9 @@ if(NOT imgui_POPULATED)
     )
 endif()
 
-add_executable(BrightnessSettings WIN32 main.cpp)
+add_executable(Brightness WIN32 main.cpp)
 
-target_link_libraries(BrightnessSettings PRIVATE
+target_link_libraries(Brightness PRIVATE
         imgui
         dxva2
         d3d11
@@ -48,16 +48,16 @@ target_link_libraries(BrightnessSettings PRIVATE
 if(MINGW)
     # Statically link C/C++ runtimes, but leave winpthread dynamic to avoid
     # the __intrinsic_setjmpex toolchain bug on MSVCRT.
-    target_link_options(BrightnessSettings PRIVATE -mwindows -s -static-libgcc -static-libstdc++)
+    target_link_options(Brightness PRIVATE -mwindows -s -static-libgcc -static-libstdc++)
 
     # Find where your MinGW compiler stores its DLLs
     get_filename_component(MINGW_BIN_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
 
     # Automatically bundle libwinpthread-1.dll next to the output executable
-    add_custom_command(TARGET BrightnessSettings POST_BUILD
+    add_custom_command(TARGET Brightness POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${MINGW_BIN_DIR}/libwinpthread-1.dll"
-            $<TARGET_FILE_DIR:BrightnessSettings>
+            $<TARGET_FILE_DIR:Brightness>
             COMMENT "Copying libwinpthread-1.dll to output directory..."
     )
 endif()
