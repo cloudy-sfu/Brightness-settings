@@ -64,6 +64,30 @@ void RenderFrame() {
 } // namespace
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
+    constexpr wchar_t instanceMutexName[] =
+        L"Local\\BrightnessSettings.SingleInstance."
+        L"{A76A33CC-DBA7-480A-99C4-667497F69C24}";
+    HANDLE instanceMutex = CreateMutexW(nullptr, FALSE, instanceMutexName);
+    if (!instanceMutex) {
+        MessageBoxW(
+            nullptr,
+            L"Brightness Settings could not check whether another instance "
+            L"is running.",
+            L"Brightness Settings",
+            MB_OK | MB_ICONERROR);
+        return 1;
+    }
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(instanceMutex);
+        MessageBoxW(
+            nullptr,
+            L"Brightness Settings is already running. Use the existing "
+            L"instance from the system tray.",
+            L"Brightness Settings",
+            MB_OK | MB_ICONWARNING | MB_SETFOREGROUND);
+        return 0;
+    }
+
     SetProcessDpiAwarenessContext(
         DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -113,6 +137,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     if (!CreateDeviceD3D(window)) {
         CleanupDeviceD3D();
         UnregisterClassW(windowClass.lpszClassName, windowClass.hInstance);
+        CloseHandle(instanceMutex);
         return 1;
     }
 
@@ -156,5 +181,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     CleanupDeviceD3D();
     DestroyWindow(window);
     UnregisterClassW(windowClass.lpszClassName, windowClass.hInstance);
+    CloseHandle(instanceMutex);
     return 0;
 }
