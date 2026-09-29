@@ -55,6 +55,7 @@ void RenderCurveEditor(
     if (points.size() < 2) {
         points = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
     }
+    points.front().lux = 0.0f;
     points.front().brightness = 0.0f;
     points.back().brightness = 100.0f;
 
@@ -76,6 +77,22 @@ void RenderCurveEditor(
         topMargin + side + xMargin);
     ImGui::InvisibleButton(id, totalSize);
 
+    ImGuiIO& io = ImGui::GetIO();
+    const bool mouseInsidePlot =
+        io.MousePos.x >= canvasPos.x &&
+        io.MousePos.x <= canvasEnd.x &&
+        io.MousePos.y >= canvasPos.y &&
+        io.MousePos.y <= canvasEnd.y;
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    const ImGuiID xRangeId = ImGui::GetID((std::string(id) + "##XRange").c_str());
+    float xAxisMaximum = storage->GetFloat(xRangeId, MAX_VEML_LUX);
+    if (mouseInsidePlot && io.MouseWheel != 0.0f) {
+        xAxisMaximum *= std::pow(0.8f, io.MouseWheel);
+    }
+    xAxisMaximum = (std::max)(
+        10.0f, (std::min)(MAX_VEML_LUX, xAxisMaximum));
+    storage->SetFloat(xRangeId, xAxisMaximum);
+
     drawList->AddRectFilled(
         canvasPos, canvasEnd, IM_COL32(30, 30, 34, 255), 4.0f);
     drawList->AddRect(
@@ -83,7 +100,7 @@ void RenderCurveEditor(
 
     const auto toScreen = [&](const CurvePoint& point) {
         const float normalizedX = (std::max)(
-            0.0f, (std::min)(1.0f, point.lux / MAX_VEML_LUX));
+            0.0f, point.lux / xAxisMaximum);
         const float normalizedY = (std::max)(
             0.0f, (std::min)(1.0f, point.brightness / 100.0f));
         return ImVec2(
@@ -120,8 +137,14 @@ void RenderCurveEditor(
         }
 
         char valueText[24];
-        std::snprintf(
-            valueText, sizeof(valueText), "%.0f", MAX_VEML_LUX * normalized);
+        const float tickValue = xAxisMaximum * normalized;
+        if (xAxisMaximum >= MAX_VEML_LUX - 0.01f) {
+            std::snprintf(valueText, sizeof(valueText), "%.2f", tickValue);
+        } else if (xAxisMaximum < 100.0f) {
+            std::snprintf(valueText, sizeof(valueText), "%.1f", tickValue);
+        } else {
+            std::snprintf(valueText, sizeof(valueText), "%.0f", tickValue);
+        }
         const ImVec2 textSize = ImGui::CalcTextSize(valueText);
         drawList->AddText(
             ImVec2(x - textSize.x * 0.5f, canvasEnd.y + 5.0f),
@@ -129,7 +152,7 @@ void RenderCurveEditor(
             valueText);
     }
 
-    const char* xAxisLabel = "Environment";
+    const char* xAxisLabel = "Ambient";
     const ImVec2 xLabelSize = ImGui::CalcTextSize(xAxisLabel);
     drawList->AddText(
         ImVec2(
@@ -143,6 +166,7 @@ void RenderCurveEditor(
         IM_COL32(210, 210, 220, 255),
         "Screen");
 
+    drawList->PushClipRect(canvasPos, canvasEnd, true);
     const ImVec2 firstPoint = toScreen(points.front());
     drawList->AddLine(
         ImVec2(canvasPos.x, firstPoint.y),
@@ -163,11 +187,12 @@ void RenderCurveEditor(
         IM_COL32(50, 160, 255, 255),
         2.0f);
 
-    if (g_SensorConnected.load(std::memory_order_relaxed)) {
-        const float displayedLux = (std::max)(
-            0.0f, (std::min)(currentLux, MAX_VEML_LUX));
+    if (g_SensorConnected.load(std::memory_order_relaxed) &&
+        currentLux >= 0.0f &&
+        currentLux <= xAxisMaximum) {
+        const float displayedLux = currentLux;
         const float currentX =
-            canvasPos.x + (displayedLux / MAX_VEML_LUX) * side;
+            canvasPos.x + (displayedLux / xAxisMaximum) * side;
         drawList->AddLine(
             ImVec2(currentX, canvasPos.y),
             ImVec2(currentX, canvasEnd.y),
@@ -181,14 +206,15 @@ void RenderCurveEditor(
         drawList->AddCircleFilled(
             ImVec2(currentX, currentY), 5.0f, IM_COL32(255, 200, 0, 255));
     }
+    drawList->PopClipRect();
 
     static int draggingIndex = -1;
     static std::string activeEditorId;
-    ImGuiIO& io = ImGui::GetIO();
     int hoveredIndex = -1;
 
     for (size_t i = 0; i < points.size(); ++i) {
         const ImVec2 position = toScreen(points[i]);
+        if (position.x < canvasPos.x || position.x > canvasEnd.x) continue;
         const bool isEndpoint = i == 0 || i == points.size() - 1;
         ImU32 color = isEndpoint
             ? IM_COL32(200, 200, 200, 255)
@@ -215,16 +241,11 @@ void RenderCurveEditor(
         drawList->AddCircleFilled(position, isEndpoint ? 6.0f : 5.0f, color);
     }
 
-    const bool mouseInsidePlot =
-        io.MousePos.x >= canvasPos.x &&
-        io.MousePos.x <= canvasEnd.x &&
-        io.MousePos.y >= canvasPos.y &&
-        io.MousePos.y <= canvasEnd.y;
     if (mouseInsidePlot &&
         hoveredIndex == -1 &&
         ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         const float clickedLux =
-            ((io.MousePos.x - canvasPos.x) / side) * MAX_VEML_LUX;
+            ((io.MousePos.x - canvasPos.x) / side) * xAxisMaximum;
         const float clickedBrightness =
             ((canvasEnd.y - io.MousePos.y) / side) * 100.0f;
 
@@ -256,13 +277,12 @@ void RenderCurveEditor(
             const size_t index = static_cast<size_t>(draggingIndex);
             if (index < points.size()) {
                 float newLux =
-                    ((io.MousePos.x - canvasPos.x) / side) * MAX_VEML_LUX;
+                    ((io.MousePos.x - canvasPos.x) / side) * xAxisMaximum;
                 float newBrightness =
                     ((canvasEnd.y - io.MousePos.y) / side) * 100.0f;
 
                 if (index == 0) {
-                    points[index].lux = (std::max)(
-                        0.0f, (std::min)(points[1].lux - 0.5f, newLux));
+                    points[index].lux = 0.0f;
                     points[index].brightness = 0.0f;
                 } else if (index == points.size() - 1) {
                     points[index].lux = (std::max)(
@@ -288,11 +308,11 @@ void RenderCurveEditor(
 
     ImGui::Spacing();
     ImGui::TextWrapped(
-        "Left click: add a point. Drag: move a point. "
-        "Gray endpoints move horizontally. "
+        "Mouse wheel: zoom horizontally.\n"
+        "Left click: add a point.\nDrag: move a point.\n"
         "Right click: delete an interior point.");
-
-    const std::string resetButtonId = "Reset Linear##" + std::string(id);
+    ImGui::Spacing();
+    const std::string resetButtonId = "Reset##" + std::string(id);
     if (ImGui::Button(resetButtonId.c_str())) {
         points = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
     }

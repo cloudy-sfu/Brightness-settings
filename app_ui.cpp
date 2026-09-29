@@ -98,7 +98,7 @@ void RenderApplicationUi() {
                 }
 
                 ImGui::Spacing();
-                ImGui::Text("Response Curve");
+                ImGui::Text("Brightness function");
                 const std::string curveId =
                     "CurveEditor##" + std::to_string(i);
                 RenderCurveEditor(
