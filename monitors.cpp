@@ -8,6 +8,15 @@
 
 namespace {
 
+constexpr BYTE VCP_POWER_MODE = 0xD6;
+constexpr DWORD POWER_MODE_ON = 0x01;
+
+bool ReadPowerMode(HANDLE physical, DWORD& mode) {
+    DWORD maximum = 0;
+    return GetVCPFeatureAndVCPFeatureReply(
+        physical, VCP_POWER_MODE, nullptr, &mode, &maximum);
+}
+
 std::string WideToUtf8(const wchar_t* value) {
     if (!value || value[0] == L'\0') return {};
     const int required = WideCharToMultiByte(
@@ -140,6 +149,10 @@ BOOL CALLBACK MonitorEnumProc(
         entry.currentBrightness = static_cast<int>(current);
         entry.sliderValue = static_cast<int>(current);
         entry.lastBrightnessReadTick = 0;
+        DWORD powerMode = 0;
+        entry.supportsPowerMode =
+            ReadPowerMode(physical.hPhysicalMonitor, powerMode);
+        entry.displayActive = true;
         ApplySettingsToMonitor(entry);
         g_Monitors.push_back(std::move(entry));
     }
@@ -165,7 +178,25 @@ void RefreshMonitors() {
     EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, 0);
 }
 
+bool UpdateMonitorDisplayActive(MonitorEntry& monitor) {
+    bool active = true;
+    DWORD mode = 0;
+    bool modeRead = false;
+    if (monitor.supportsPowerMode) {
+        modeRead = ReadPowerMode(monitor.hPhysical, mode);
+        active = modeRead && mode == POWER_MODE_ON;
+    }
+
+    if (active && !monitor.displayActive) {
+        monitor.lastBrightnessReadTick = 0;
+    }
+    monitor.displayActive = active;
+    return active;
+}
+
 void PollManualMonitorBrightness() {
+    if (g_DisplaysOff.load(std::memory_order_relaxed)) return;
+
     const DWORD now = GetTickCount();
     if (now - g_LastGuiPollTime < READ_INTERVAL_MS) {
         return;
@@ -177,6 +208,7 @@ void PollManualMonitorBrightness() {
         if (monitor.autoBrightness || !monitor.hasPhysicalHandle) {
             continue;
         }
+        if (!UpdateMonitorDisplayActive(monitor)) continue;
 
         DWORD minimum = 0;
         DWORD current = 0;

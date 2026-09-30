@@ -2,6 +2,7 @@
 
 #include "app_state.h"
 #include "brightness_curve.h"
+#include "monitors.h"
 
 #include <setupapi.h>
 extern "C" {
@@ -416,6 +417,7 @@ void UpdateAutomaticBrightness(float lux) {
 
     for (auto& monitor : g_Monitors) {
         if (!monitor.autoBrightness || !monitor.hasPhysicalHandle) continue;
+        if (!UpdateMonitorDisplayActive(monitor)) continue;
 
         if (now - monitor.lastBrightnessReadTick >= READ_INTERVAL_MS) {
             DWORD minimum = 0;
@@ -460,19 +462,26 @@ void UpdateAutomaticBrightness(float lux) {
 void SensorPollingWorker() {
     Mcp2221VemlDriver driver;
 
+    const HANDLE waitHandles[] = {g_hShutdownEvent, g_hDisplayStateEvent};
+
     while (g_AppRunning.load()) {
-        float lux = 0.0f;
-        if (driver.ReadLux(lux)) {
-            g_SensorConnected.store(true, std::memory_order_relaxed);
-            g_CurrentLux.store(lux, std::memory_order_relaxed);
-            g_SmoothedLux.store(lux, std::memory_order_relaxed);
-            UpdateAutomaticBrightness(lux);
-        } else {
-            g_SensorConnected.store(false, std::memory_order_relaxed);
+        if (!g_DisplaysOff.load(std::memory_order_relaxed)) {
+            float lux = 0.0f;
+            if (driver.ReadLux(lux)) {
+                g_SensorConnected.store(true, std::memory_order_relaxed);
+                g_CurrentLux.store(lux, std::memory_order_relaxed);
+                g_SmoothedLux.store(lux, std::memory_order_relaxed);
+                UpdateAutomaticBrightness(lux);
+            } else {
+                g_SensorConnected.store(false, std::memory_order_relaxed);
+            }
         }
 
-        if (WaitForSingleObject(g_hShutdownEvent, READ_INTERVAL_MS) !=
-            WAIT_TIMEOUT) {
+        const DWORD timeout = g_DisplaysOff.load(std::memory_order_relaxed)
+            ? INFINITE
+            : READ_INTERVAL_MS;
+        if (WaitForMultipleObjects(2, waitHandles, FALSE, timeout) ==
+            WAIT_OBJECT_0) {
             break;
         }
     }

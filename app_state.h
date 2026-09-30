@@ -33,6 +33,8 @@ struct MonitorEntry {
     int sliderValue;
     bool autoBrightness;
     DWORD lastBrightnessReadTick;
+    bool supportsPowerMode;
+    bool displayActive;
     std::vector<CurvePoint> curve;
 };
 
@@ -49,3 +51,5 @@ extern std::atomic<float> g_CurrentLux;
 extern std::atomic<float> g_SmoothedLux;
 extern DWORD g_LastGuiPollTime;
 extern HANDLE g_hShutdownEvent;
+extern std::atomic<bool> g_DisplaysOff;
+extern HANDLE g_hDisplayStateEvent;

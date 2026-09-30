@@ -5,6 +5,8 @@
 
 #include <shellapi.h>
 
+#include <cstring>
+
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 
@@ -82,7 +84,25 @@ void OpenMainWindow(HWND window) {
     g_LastGuiPollTime = 0;
 }
 
+// GUID_CONSOLE_DISPLAY_STATE
+constexpr GUID CONSOLE_DISPLAY_STATE_GUID = {
+    0x6FE69556, 0x704A, 0x47A0,
+    {0x8F, 0x24, 0xC2, 0x8D, 0x93, 0x6F, 0xDA, 0x47}};
+
+void HandleDisplayStateChange(DWORD state) {
+    const bool displaysOff = state == 0;
+    if (g_DisplaysOff.exchange(displaysOff) == displaysOff) return;
+
+    if (!displaysOff) g_LastGuiPollTime = 0;
+    SetEvent(g_hDisplayStateEvent);
+}
+
 } // namespace
+
+HPOWERNOTIFY RegisterDisplayStateNotification(HWND window) {
+    return RegisterPowerSettingNotification(
+        window, &CONSOLE_DISPLAY_STATE_GUID, DEVICE_NOTIFY_WINDOW_HANDLE);
+}
 
 void InstallTrayIcon(HWND window) {
     g_TrayIcon.cbSize = sizeof(NOTIFYICONDATAW);
@@ -173,6 +193,20 @@ LRESULT WINAPI WndProc(
                 SWP_NOZORDER | SWP_NOACTIVATE);
             return 0;
         }
+        case WM_POWERBROADCAST:
+            if (wParam == PBT_POWERSETTINGCHANGE) {
+                const auto* setting =
+                    reinterpret_cast<const POWERBROADCAST_SETTING*>(lParam);
+                if (setting &&
+                    IsEqualGUID(
+                        setting->PowerSetting, CONSOLE_DISPLAY_STATE_GUID) &&
+                    setting->DataLength >= sizeof(DWORD)) {
+                    DWORD state = 0;
+                    std::memcpy(&state, setting->Data, sizeof(state));
+                    HandleDisplayStateChange(state);
+                }
+            }
+            return TRUE;
         case WM_CLOSE:
             ShowWindow(window, SW_HIDE);
             return 0;

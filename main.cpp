@@ -144,6 +144,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     }
 
     InstallTrayIcon(window);
+    HPOWERNOTIFY displayStateNotification =
+        RegisterDisplayStateNotification(window);
     ShowWindow(window, SW_SHOWDEFAULT);
     UpdateWindow(window);
     InitializeSettings();
@@ -177,6 +179,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     SetEvent(g_hShutdownEvent);
     if (sensorThread.joinable()) sensorThread.join();
     CloseHandle(g_hShutdownEvent);
+    if (displayStateNotification) {
+        UnregisterPowerSettingNotification(displayStateNotification);
+    }
     ReleaseMonitors();
 
     ImGui_ImplDX11_Shutdown();

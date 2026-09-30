@@ -68,6 +68,10 @@ void RenderApplicationUi() {
 
                 ImGui::Spacing();
                 ImGui::Text("Brightness: %d%%", monitor.sliderValue);
+                if (!monitor.displayActive) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(display in standby, updates paused)");
+                }
                 if (monitor.autoBrightness) ImGui::BeginDisabled();
                 ImGui::SetNextItemWidth(-1);
                 ImGui::SliderInt(
