@@ -29,17 +29,15 @@ void RenderApplicationUi() {
         SetAutoStart(autoStart);
     }
 
-    const float rawLux = g_CurrentLux.load(std::memory_order_relaxed);
-    const float smoothedLux = g_SmoothedLux.load(std::memory_order_relaxed);
+    const float currentLux = g_CurrentLux.load(std::memory_order_relaxed);
     if (g_SensorConnected.load(std::memory_order_relaxed)) {
         ImGui::TextColored(
             ImVec4(0.2f, 0.9f, 0.3f, 1.0f),
-            "VEML7700: Connected (Raw: %.1f lx, Filtered: %.1f lx)",
-            rawLux,
-            smoothedLux);
+            "VEML7700: Connected | Ambient light: %.1f Lux",
+            currentLux);
     } else {
         ImGui::TextDisabled(
-            "VEML7700: Not detected (Waiting for device...)");
+            "VEML7700: Not detected | Waiting for device ...");
     }
 
     ImGui::Spacing();
@@ -70,7 +68,7 @@ void RenderApplicationUi() {
                 ImGui::Text("Brightness: %d%%", monitor.sliderValue);
                 if (!monitor.displayActive) {
                     ImGui::SameLine();
-                    ImGui::TextDisabled("(display in standby, updates paused)");
+                    ImGui::TextDisabled("Display in standby, updates paused.");
                 }
                 if (monitor.autoBrightness) ImGui::BeginDisabled();
                 ImGui::SetNextItemWidth(-1);
@@ -110,7 +108,7 @@ void RenderApplicationUi() {
                 const std::string curveId =
                     "CurveEditor##" + std::to_string(i);
                 if (RenderCurveEditor(
-                        curveId.c_str(), monitor.curve, smoothedLux)) {
+                        curveId.c_str(), monitor.curve, currentLux)) {
                     SaveMonitorSettings(monitor);
                 }
                 ImGui::EndTabItem();

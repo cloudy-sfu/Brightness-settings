@@ -470,7 +470,6 @@ void SensorPollingWorker() {
             if (driver.ReadLux(lux)) {
                 g_SensorConnected.store(true, std::memory_order_relaxed);
                 g_CurrentLux.store(lux, std::memory_order_relaxed);
-                g_SmoothedLux.store(lux, std::memory_order_relaxed);
                 UpdateAutomaticBrightness(lux);
             } else {
                 g_SensorConnected.store(false, std::memory_order_relaxed);

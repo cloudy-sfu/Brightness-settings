@@ -48,7 +48,6 @@ extern NOTIFYICONDATAW g_TrayIcon;
 extern std::atomic<bool> g_AppRunning;
 extern std::atomic<bool> g_SensorConnected;
 extern std::atomic<float> g_CurrentLux;
-extern std::atomic<float> g_SmoothedLux;
 extern DWORD g_LastGuiPollTime;
 extern HANDLE g_hShutdownEvent;
 extern std::atomic<bool> g_DisplaysOff;
