@@ -2,6 +2,7 @@
 
 #include "app_state.h"
 #include "graphics.h"
+#include "resource.h"
 
 #include <shellapi.h>
 
@@ -97,6 +98,63 @@ void HandleDisplayStateChange(DWORD state) {
     SetEvent(g_hDisplayStateEvent);
 }
 
+const UINT TASKBAR_CREATED_MESSAGE = RegisterWindowMessageW(L"TaskbarCreated");
+bool g_TrayIconLight = false;
+int g_TrayIconSize = 0;
+
+// Before Windows 10 the value does not exist and the taskbar is dark.
+bool IsTaskbarLightTheme() {
+    HKEY key;
+    if (RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+            0,
+            KEY_QUERY_VALUE,
+            &key) != ERROR_SUCCESS) {
+        return false;
+    }
+    DWORD value = 0;
+    DWORD type = 0;
+    DWORD size = sizeof(value);
+    const LONG result = RegQueryValueExW(
+        key,
+        L"SystemUsesLightTheme",
+        nullptr,
+        &type,
+        reinterpret_cast<BYTE*>(&value),
+        &size);
+    RegCloseKey(key);
+    return result == ERROR_SUCCESS && type == REG_DWORD && value != 0;
+}
+
+HICON LoadTrayIcon(bool light, int size) {
+    return static_cast<HICON>(LoadImageW(
+        GetModuleHandleW(nullptr),
+        MAKEINTRESOURCEW(light ? IDI_TRAY_LIGHT : IDI_TRAY_DARK),
+        IMAGE_ICON,
+        size,
+        size,
+        LR_DEFAULTCOLOR));
+}
+
+void RefreshTrayIcon(bool force) {
+    const bool light = IsTaskbarLightTheme();
+    const int size = GetSystemMetrics(SM_CXSMICON);
+    if (!force && light == g_TrayIconLight && size == g_TrayIconSize) return;
+
+    HICON icon = LoadTrayIcon(light, size);
+    if (!icon) return;
+
+    HICON oldIcon = g_TrayIcon.hIcon;
+    g_TrayIcon.hIcon = icon;
+    g_TrayIconLight = light;
+    g_TrayIconSize = size;
+    if (!Shell_NotifyIconW(NIM_MODIFY, &g_TrayIcon)) {
+        Shell_NotifyIconW(NIM_ADD, &g_TrayIcon);
+    }
+    if (oldIcon) DestroyIcon(oldIcon);
+}
+
 } // namespace
 
 HPOWERNOTIFY RegisterDisplayStateNotification(HWND window) {
@@ -110,7 +168,12 @@ void InstallTrayIcon(HWND window) {
     g_TrayIcon.uID = 1001;
     g_TrayIcon.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_TrayIcon.uCallbackMessage = WM_TRAYICON;
-    g_TrayIcon.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    g_TrayIconLight = IsTaskbarLightTheme();
+    g_TrayIconSize = GetSystemMetrics(SM_CXSMICON);
+    g_TrayIcon.hIcon = LoadTrayIcon(g_TrayIconLight, g_TrayIconSize);
+    if (!g_TrayIcon.hIcon) {
+        g_TrayIcon.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    }
     wcscpy_s(g_TrayIcon.szTip, L"Brightness Controller");
     Shell_NotifyIconW(NIM_ADD, &g_TrayIcon);
 }
@@ -191,8 +254,14 @@ LRESULT WINAPI WndProc(
                 newRect->right - newRect->left,
                 newRect->bottom - newRect->top,
                 SWP_NOZORDER | SWP_NOACTIVATE);
+            RefreshTrayIcon(false);
             return 0;
         }
+        case WM_SETTINGCHANGE:
+        case WM_THEMECHANGED:
+        case WM_DISPLAYCHANGE:
+            RefreshTrayIcon(false);
+            break;
         case WM_POWERBROADCAST:
             if (wParam == PBT_POWERSETTINGCHANGE) {
                 const auto* setting =
@@ -252,6 +321,12 @@ LRESULT WINAPI WndProc(
             PostQuitMessage(0);
             return 0;
         default:
-            return DefWindowProcW(window, message, wParam, lParam);
+            if (TASKBAR_CREATED_MESSAGE != 0 &&
+                message == TASKBAR_CREATED_MESSAGE) {
+                RefreshTrayIcon(true);
+                return 0;
+            }
+            break;
     }
+    return DefWindowProcW(window, message, wParam, lParam);
 }

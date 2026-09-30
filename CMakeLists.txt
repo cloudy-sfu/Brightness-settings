@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Brightness CXX)
+project(Brightness CXX RC)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +43,7 @@ add_executable(Brightness WIN32
         monitors.cpp
         settings.cpp
         windows_ui.cpp
+        resources.rc
 )
 
 target_link_libraries(Brightness PRIVATE
