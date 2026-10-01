@@ -57,7 +57,6 @@ bool RenderCurveEditor(
         points = {{0.0f, 0.0f}, {MAX_VEML_LUX, 100.0f}};
         changed = true;
     }
-    points.front().lux = 0.0f;
     points.front().brightness = 0.0f;
     points.back().brightness = 100.0f;
 
@@ -290,7 +289,9 @@ bool RenderCurveEditor(
                     ((canvasEnd.y - io.MousePos.y) / side) * 100.0f;
 
                 if (index == 0) {
-                    points[index].lux = 0.0f;
+                    points[index].lux = (std::max)(
+                        0.0f,
+                        (std::min)(points[index + 1].lux - 0.5f, newLux));
                     points[index].brightness = 0.0f;
                 } else if (index == points.size() - 1) {
                     points[index].lux = (std::max)(
@@ -298,14 +299,13 @@ bool RenderCurveEditor(
                         (std::min)(MAX_VEML_LUX, newLux));
                     points[index].brightness = 100.0f;
                 } else {
-                    newLux = (std::max)(
+                    points[index].lux = (std::max)(
                         points[index - 1].lux + 0.5f,
                         (std::min)(points[index + 1].lux - 0.5f, newLux));
-                    newBrightness = (std::max)(
+                    points[index].brightness = (std::max)(
                         points[index - 1].brightness,
                         (std::min)(
                             points[index + 1].brightness, newBrightness));
-                    points[index] = {newLux, newBrightness};
                 }
                 if (points[index].lux != oldPoint.lux ||
                     points[index].brightness != oldPoint.brightness) {

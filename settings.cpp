@@ -138,7 +138,7 @@ bool ParseCurve(const std::string& value, std::vector<CurvePoint>& curve) {
         }
     }
 
-    curve.front() = {0.0f, 0.0f};
+    curve.front().brightness = 0.0f;
     curve.back().brightness = 100.0f;
     return true;
 }
